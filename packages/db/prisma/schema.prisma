@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// tables requises par NextAuth
+model Account {
+  id                String  @id @default(cuid())
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  expires      DateTime
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id              String    @id @default(cuid())
+  name            String?
+  email           String?   @unique
+  emailVerified   DateTime?
+  image           String?
+  discordUsername String?
+  lookingForTeam  Boolean   @default(false)
+  acceptDm        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  accounts        Account[]
+  sessions        Session[]
+  riotAccount     RiotAccount?
+  teamMemberships TeamMember[]
+  captainOf       Team[]       @relation("TeamCaptain")
+}
+
+model RiotAccount {
+  id         String   @id @default(cuid())
+  gameName   String
+  tagLine    String
+  puuid      String?
+  summonerId String?
+
+  // rank saison courante (RANKED_SOLO_5x5)
+  tier       String?  // ex: GOLD, PLATINUM
+  rank       String?  // ex: I, II, III, IV
+  lp         Int?     // league points
+  wins       Int?
+  losses     Int?
+
+  // icône de profil
+  profileIconId Int?
+  iconUrl       String?
+
+  // coût en points pour le tournoi (null = rang inéligible)
+  points     Float?
+
+  // rôles souhaités pour le tournoi
+  roles      String[]
+
+  // rang saison précédente (si disponible)
+  prevTier       String?
+  prevRank       String?
+
+  // date du dernier refresh manuel
+  lastRefreshedAt DateTime?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([gameName, tagLine])
+}
+
+model Team {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  tag         String     @unique
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  captainId String
+  captain   User       @relation("TeamCaptain", fields: [captainId], references: [id])
+  members   TeamMember[]
+  matchesA  Match[]    @relation("TeamA")
+  matchesB  Match[]    @relation("TeamB")
+}
+
+model TeamMember {
+  joinedAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([userId, teamId])
+}
+
+model Tournament {
+  id        String   @id @default(cuid())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+
+  matches Match[]
+}
+
+model Match {
+  id          String   @id @default(cuid())
+  round       Int
+  scheduledAt DateTime
+  result      String?
+  createdAt   DateTime @default(now())
+
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  teamAId      String
+  teamA        Team       @relation("TeamA", fields: [teamAId], references: [id])
+  teamBId      String
+  teamB        Team       @relation("TeamB", fields: [teamBId], references: [id])
+}
