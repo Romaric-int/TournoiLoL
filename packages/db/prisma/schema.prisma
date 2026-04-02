@@ -108,6 +108,7 @@ model Team {
   name        String     @unique
   tag         String     @unique
   description String?
+  logoUrl     String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -120,6 +121,7 @@ model Team {
 
 model TeamMember {
   joinedAt DateTime @default(now())
+  role     Role?
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -127,6 +129,15 @@ model TeamMember {
   team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@id([userId, teamId])
+  @@unique([teamId, role])
+}
+
+enum Role {
+  TOP
+  JUNGLE
+  MID
+  ADC
+  SUPPORT
 }
 
 model Tournament {

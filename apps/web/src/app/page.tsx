@@ -1,24 +1,46 @@
+"use client";
+
 import Link from "next/link";
+import { useSearchParams, useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
-  return (
-    <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-6 py-16">
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const error = searchParams.get('error');
+  const [showErrorPopup, setShowErrorPopup] = useState(false);
 
-      {/* grille de fond décorative */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage:
-            "linear-gradient(var(--foreground) 1px, transparent 1px), linear-gradient(90deg, var(--foreground) 1px, transparent 1px)",
-          backgroundSize: "60px 60px",
-        }}
-      />
+  useEffect(() => {
+    if (error === 'OAuthCallbackError' && !showErrorPopup) {
+      setShowErrorPopup(true);
+    }
+  }, [error, showErrorPopup]);
+
+  useEffect(() => {
+    if (showErrorPopup) {
+      const timer = setTimeout(() => {
+        setShowErrorPopup(false);
+        router.replace('/');
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [showErrorPopup, router]);
+
+  return (
+    <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-6 py-16 background-image-grid">
+
+      {/* popup d'erreur OAuth */}
+      {showErrorPopup && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50">
+          Une erreur est survenue lors de la connexion OAuth
+        </div>
+      )}
 
       {/* lueur centrale */}
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--accent)] opacity-[0.06] blur-3xl" />
 
       {/* contenu principal */}
-      <div className="relative flex flex-col items-center gap-8 text-center">
+      <div className="glass relative flex flex-col items-center gap-8 rounded-2xl px-8 py-12 text-center sm:px-12 sm:py-16">
 
         {/* badge */}
         <div className="flex items-center gap-2 rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-4 py-1.5 text-sm text-[var(--accent)]">

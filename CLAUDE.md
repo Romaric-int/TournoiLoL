@@ -24,6 +24,7 @@ Application web pour organiser des tournois League of Legends.
 - Pour les icônes en frontend, utiliser des SVG (pas d'emoji)
 - `cursor-pointer` sur tous les éléments cliquables (boutons, liens)
 - Tailwind pour la structure/layout + `globals.css` pour les variables CSS et effets custom
+- Mettre sur toutes les pages la classe `background-image-grid` sur la div la plus haute pour avoir la grille et le dégradé en fond
 
 ## Architecture des appels
 ```
@@ -51,7 +52,12 @@ apps/web/src/
 │   ├── page.tsx                            # homepage (/)
 │   ├── rateme/
 │   │   └── page.tsx                        # inscription : liaison Riot, rôles, préférences joueur
-│   ├── mercato/                            # page mercato (à créer)
+│   ├── team/
+│   │   └── page.tsx                        # mon équipe : drag-and-drop des rôles
+│   ├── team-create/
+│   │   └── page.tsx                        # création d'équipe (nom, tag, logo optionnel via Cloudinary)
+│   ├── mercato/
+│   │   └── page.tsx                        # liste des équipes + bouton Postuler
 │   └── api/
 │       ├── auth/[...nextauth]/route.ts     # route NextAuth
 │       ├── riot/
@@ -60,6 +66,13 @@ apps/web/src/
 │       │   ├── save/route.ts               # POST — sauvegarde compte Riot
 │       │   ├── refresh/route.ts            # POST — actualise les données Riot
 │       │   └── roles/route.ts              # POST — sauvegarde les rôles du joueur
+│       ├── team/
+│       │   ├── create/route.ts             # POST — crée une équipe
+│       │   ├── my/route.ts                 # GET — équipe de l'utilisateur connecté
+│       │   ├── list/route.ts               # GET — toutes les équipes
+│       │   ├── assign/route.ts             # POST — assigne un rôle à un membre
+│       │   ├── unassign/route.ts           # POST — retire le rôle d'un membre (→ pending)
+│       │   └── join/route.ts               # POST — rejoindre une équipe (depuis le mercato)
 │       └── user/
 │           └── preferences/route.ts        # GET + PATCH — préférences joueur
 ├── components/
@@ -75,7 +88,7 @@ apps/web/src/
 ```
 apps/api/src/
 ├── main.ts                  # entrée, charge dotenv, port 3001
-├── app.module.ts            # importe PrismaModule + RiotModule + UserModule
+├── app.module.ts            # importe PrismaModule + RiotModule + UserModule + TeamModule
 ├── prisma/
 │   ├── prisma.module.ts     # module global
 │   └── prisma.service.ts    # client Prisma injectable
@@ -83,17 +96,26 @@ apps/api/src/
 │   ├── riot.module.ts
 │   ├── riot.controller.ts   # GET /riot/me, POST /riot/save, POST /riot/refresh, POST /riot/roles
 │   └── riot.service.ts      # logique métier + appels Riot API
-└── user/
-    ├── user.module.ts
-    ├── user.controller.ts   # GET /user/preferences, PATCH /user/preferences
-    └── user.service.ts      # lecture/écriture préférences utilisateur
+├── user/
+│   ├── user.module.ts
+│   ├── user.controller.ts   # GET /user/preferences, PATCH /user/preferences
+│   └── user.service.ts      # lecture/écriture préférences utilisateur
+└── team/
+    ├── team.module.ts
+    ├── team.controller.ts   # POST /team/create, GET /team/me/:userId, GET /team/all,
+    │                        # POST /team/add-member, POST /team/assign-role,
+    │                        # POST /team/unassign-role, POST /team/remove-member
+    └── team.service.ts      # logique métier équipe
 ```
 
 ## Design system
 - Thème sombre gaming
 - Variables CSS dans `globals.css` : `--background`, `--foreground`, `--accent` (#5865f2 violet Discord), `--border`, `--surface`, `--surface-hover`, `--muted`
 - Classe `.glow` pour l'effet lumineux sur les éléments interactifs
+- Classe `.glass` pour l'effet glassmorphism sur les cards
+- Pour les cards/blocs, préférer `border-white/15 bg-white/5` plutôt que `border-[var(--border)] bg-[var(--surface)]` qui est trop peu contrasté sur le fond sombre
 - Logo : `public/images/logo.svg`
+- Icônes de rôles LoL : `public/images/logo_top.png`, `logo_jgl.png`, `logo_mid.png`, `logo_adc.png`, `logo_support.png`
 
 ## Page rateme/ — fonctionnement
 1. Non connecté : bouton Discord OAuth
@@ -106,6 +128,39 @@ apps/api/src/
    - Toggle "Je recherche une équipe" : si activé sans rôles → ouvre la modal des rôles
    - Toggle "J'accepte les DM Discord"
    - Les toggles sont sauvegardés immédiatement en base au clic
+   - Bouton "Mon équipe" (→ `/team`) si le joueur a déjà une équipe, sinon "Créer une équipe" (→ `/team-create`)
+   - Le statut d'équipe est chargé en parallèle via `GET /api/team/my` au montage de la page
+
+## Page team/ — fonctionnement
+- Affiche l'équipe du joueur connecté (ou un lien vers /team-create si aucune)
+- Layout : panneau "Joueurs en attente" à gauche (sidebar fixe `w-52`) + 5 slots de rôles à droite (grid `xl:grid-cols-5`)
+- Les deux colonnes ont la même hauteur (`items-stretch`)
+- Chaque carte joueur affiche : icône Riot (ou initiale), nom, badge points (`Xpts`)
+- La carte équipe en haut affiche le total de points de tous les membres (`X/100`, rouge si dépassement)
+- NestJS `getTeamByUser` inclut `riotAccount { iconUrl, points }` dans chaque membre
+- **Drag-and-drop HTML5** (seul le capitaine peut déplacer) :
+  - Pending → slot : assigne le rôle (`POST /api/team/assign`)
+  - Slot → pending : retire le rôle, remet en attente (`POST /api/team/unassign`)
+  - Slot → autre slot : libère l'occupant actuel puis assigne le joueur glissé
+- Le capitaine est créé **sans rôle** (en attente) à la création de l'équipe et peut se placer lui-même
+- Les slots de rôles ont chacun une couleur thématique (orange TOP, vert JUNGLE, bleu MID, rouge ADC, violet SUPPORT) avec icône PNG dédiée
+
+## Page team-create/ — fonctionnement
+- Formulaire : nom, tag, logo (optionnel — upload Cloudinary via `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` + `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET`)
+- Le capitaine est ajouté comme membre avec `role: null` (en attente)
+- Un joueur ne peut créer qu'une seule équipe (vérification en DB avant création)
+
+## Page mercato/ — fonctionnement
+- Liste toutes les équipes
+- Bouton "Postuler" → `POST /api/team/join` → ajoute le joueur comme membre sans rôle
+- Un joueur ne peut rejoindre qu'une seule équipe (vérification en DB)
+
+## Règles métier équipe
+- Un joueur ne peut appartenir qu'à **une seule équipe** (vérifié dans `addMember` et `createTeam`)
+- Maximum **5 membres** par équipe
+- Un seul joueur par rôle (contrainte `@@unique([teamId, role])` en DB, NULL autorisé multiple fois)
+- Seul le **capitaine** peut assigner/désassigner les rôles (`requesterId` vérifié côté NestJS)
+- Le capitaine peut lui-même être assigné à un rôle ou remis en attente
 
 ## Système de points tournoi
 - Chaque joueur a un coût en points selon son rang solo/duo (stocké dans `RiotAccount.points`)
@@ -142,8 +197,9 @@ Rangs inéligibles (points = null) : Iron, Bronze, Diamond II+, Master, Grandmas
 - **User** : id, name, email, emailVerified, image, discordUsername, lookingForTeam, acceptDm (+ relations NextAuth)
 - **Account / Session / VerificationToken** : tables NextAuth
 - **RiotAccount** : gameName, tagLine, puuid, summonerId, profileIconId, iconUrl, tier, rank, lp, wins, losses, points, prevTier, prevRank, roles (String[]), lastRefreshedAt
-- **Team** : name, tag, description, captain (User), members (User[])
-- **TeamMember** : relation User <-> Team avec joinedAt
+- **Team** : id, name (unique), tag (unique), description, logoUrl, captainId, members (TeamMember[])
+- **TeamMember** : userId, teamId, role (Role? — nullable), joinedAt — `@@id([userId, teamId])`, `@@unique([teamId, role])`
+- **Role** (enum) : TOP, JUNGLE, MID, ADC, SUPPORT
 - **Tournament** : name, startDate, endDate
 - **Match** : teamA, teamB, round, scheduledAt, result, lié à Tournament
 
@@ -156,6 +212,8 @@ Rangs inéligibles (points = null) : Iron, Bronze, Diamond II+, Master, Grandmas
 - `RIOT_API_KEY`
 - `INTERNAL_API_SECRET`
 - `NEST_API_URL` = http://localhost:3001
+- `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME`
+- `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET`
 
 ### apps/api/.env
 - `DATABASE_URL` = postgresql://...

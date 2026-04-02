@@ -67,6 +67,7 @@ export default function RateMePage() {
   const [roleModalFromToggle, setRoleModalFromToggle] = useState(false);
   const [lookingForTeam, setLookingForTeam] = useState(false);
   const [acceptDm, setAcceptDm] = useState(false);
+  const [hasTeam, setHasTeam] = useState(false);
 
   // récupère le compte Riot déjà lié et les préférences si connecté
   useEffect(() => {
@@ -87,13 +88,14 @@ export default function RateMePage() {
       }
     }
 
-    Promise.all([safeFetchJson("/api/riot/me"), safeFetchJson("/api/user/preferences")])
-      .then(([riotData, prefData]) => {
+    Promise.all([safeFetchJson("/api/riot/me"), safeFetchJson("/api/user/preferences"), safeFetchJson("/api/team/my")])
+      .then(([riotData, prefData, teamData]) => {
         if (riotData?.riotAccount) setLinkedAccount(riotData.riotAccount);
         if (prefData?.preferences) {
           setLookingForTeam(prefData.preferences.lookingForTeam);
           setAcceptDm(prefData.preferences.acceptDm);
         }
+        setHasTeam(!!teamData?.team);
       })
       .catch(() => {
         setError("Impossible de charger les données, veuillez réessayer.");
@@ -242,17 +244,7 @@ export default function RateMePage() {
   const eligible = linkedAccount !== null && !rankIneligible && missingGames === 0;
 
   return (
-    <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-6 py-16">
-
-      {/* grille de fond décorative */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage:
-            "linear-gradient(var(--foreground) 1px, transparent 1px), linear-gradient(90deg, var(--foreground) 1px, transparent 1px)",
-          backgroundSize: "60px 60px",
-        }}
-      />
+    <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-6 py-16 background-image-grid">
 
       {/* lueur centrale */}
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--accent)] opacity-[0.06] blur-3xl" />
@@ -261,7 +253,7 @@ export default function RateMePage() {
 
         {/* non connecté */}
         {!session ? (
-          <div className="flex flex-col items-center gap-6 text-center">
+          <div className="glass flex flex-col items-center gap-6 rounded-2xl border border-[var(--border)] p-8 text-center">
             <h1 className="text-3xl font-bold text-[var(--foreground)]">Inscription</h1>
             <p className="text-[var(--muted)]">
               Connecte-toi avec Discord pour lier ton compte Riot et t&apos;inscrire au tournoi.
@@ -278,8 +270,8 @@ export default function RateMePage() {
         ) : linkedAccount ? (
 
           /* compte Riot déjà lié — affichage des infos */
-          <div className="flex flex-col items-center gap-6 text-center">
-            <div className="relative flex w-full flex-col items-center gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
+          <div className="glass flex flex-col items-center gap-6 rounded-2xl border border-[var(--border)] p-8 text-center">
+            <div className="relative flex w-full flex-col items-center gap-4 rounded-xl p-6">
 
               {/* bouton actualiser */}
               <button
@@ -421,6 +413,24 @@ export default function RateMePage() {
                       </button>
                     ))}
                   </div>
+
+                  {/* bouton voir les équipes qui recrutent si recherche équipe */}
+                  {lookingForTeam && (
+                    <Link
+                      href="/mercato"
+                      className="glow cursor-pointer rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--accent-hover)]"
+                    >
+                      Voir les équipes qui recrutent
+                    </Link>
+                  )}
+
+                  {/* bouton équipe : voir mon équipe si déjà dedans, sinon créer */}
+                  <Link
+                    href={hasTeam ? "/team" : "/team-create"}
+                    className="glow cursor-pointer rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--accent-hover)]"
+                  >
+                    {hasTeam ? "Mon équipe" : "Créer une équipe"}
+                  </Link>
                 </>
               ) : rankIneligible ? (
                 <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2">
@@ -441,7 +451,7 @@ export default function RateMePage() {
         ) : (
 
           /* connecté sans compte lié — formulaire */
-          <div className="flex flex-col gap-6">
+          <div className="glass flex flex-col gap-6 rounded-2xl border border-[var(--border)] p-8">
             <div className="text-center">
               <h1 className="text-3xl font-bold text-[var(--foreground)]">Lier ton compte Riot</h1>
               <p className="mt-2 text-[var(--muted)]">
@@ -487,7 +497,7 @@ export default function RateMePage() {
 
             {/* carte joueur trouvé */}
             {player && (
-              <div className="flex flex-col items-center gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 text-center">
+              <div className="glass flex flex-col items-center gap-4 rounded-xl border border-[var(--border)] p-6 text-center">
 
                 <div className="relative">
                   <Image
@@ -547,23 +557,18 @@ export default function RateMePage() {
           </div>
         )}
       </div>
-      <div className="mt-6 flex w-full justify-center">
-        <Link href="/create-team" className="glow cursor-pointer rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--accent-hover)]">
-          Créer une équipe
-        </Link>
-      </div>
 
       {/* modal sélection des rôles */}
       {showRoleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-xl">
+          <div className="glass w-full max-w-sm rounded-xl border border-[var(--border)] p-6 shadow-xl">
             <h2 className="mb-1 text-lg font-bold text-[var(--foreground)]">Tes rôles</h2>
             <p className="mb-5 text-sm text-[var(--muted)]">
               Sélectionne les rôles que tu souhaites jouer en équipe.
             </p>
 
             <div className="flex flex-col gap-2">
-              {["Top", "Jungle", "Mid", "Bot", "Support"].map((role) => {
+              {["Top", "Jungle", "Mid", "Adc", "Support"].map((role) => {
                 const active = selectedRoles.includes(role);
                 return (
                   <button

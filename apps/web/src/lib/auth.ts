@@ -11,6 +11,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret: process.env.DISCORD_CLIENT_SECRET!,
     }),
   ],
+  pages: {   // page de connexion custom
+    signIn: "/",
+    error: "/", 
+  },
   callbacks: {
     // rend l'id utilisateur accessible dans la session
     session({ session, user }) {
